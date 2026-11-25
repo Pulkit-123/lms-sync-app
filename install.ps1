@@ -35,7 +35,9 @@
         $release = Invoke-RestMethod -Uri "$Api/repos/$Repo/releases/latest" -Headers $Headers -UseBasicParsing
         $zip = Join-Path $Tmp 'app.zip'
         Invoke-WebRequest -Uri $release.zipball_url -Headers $Headers -OutFile $zip -UseBasicParsing
-        Expand-Archive -Path $zip -DestinationPath (Join-Path $Tmp 'x') -Force
+        # .NET directly: Expand-Archive breaks in Windows PowerShell when PowerShell 7 is also installed.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::ExtractToDirectory($zip, (Join-Path $Tmp 'x'))
         $top = Get-ChildItem (Join-Path $Tmp 'x') -Directory | Select-Object -First 1
         if (-not (Test-Path (Join-Path $top.FullName 'src\cli.py'))) { throw "The download doesn't look like LMS Sync." }
         New-Item -ItemType Directory -Path $Dir -Force | Out-Null

@@ -27,6 +27,7 @@ def _powershell(script: str, args: tuple[str, ...] = (), timeout: int = 600) -> 
     """Values travel through environment variables (LMS_ARG0…), never spliced
     into the script, so a file or course name can't become code."""
     env = {**os.environ, **{f"LMS_ARG{i}": a for i, a in enumerate(args)}}
+    env.pop("PSModulePath", None)  # inherited from PowerShell 7 it makes Windows PowerShell load the wrong modules
     return subprocess.run(
         ["powershell", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command",
          "[Console]::OutputEncoding=[Text.Encoding]::UTF8; " + script],
