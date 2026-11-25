@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "LMS Sync capture",
+  "version": "1.0.0",
+  "description": "Saves pages and files you open from the LMS Sync app (running on this computer) using your own Chrome.",
+  "permissions": [
+    "debugger",
+    "pageCapture",
+    "tabs",
+    "storage",
+    "webRequest",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "https://*.sharepoint.com/*",
+    "https://elearn.isb.edu/*",
+    "https://www.dropbox.com/*",
+    "https://*.dropboxusercontent.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1:8765/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "Add this page to a course",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

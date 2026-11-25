@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+logs/
+.claude/settings.local.json
+
+# Real course data belongs in ~/ISB Courses/, never in this repo.
+# This tool's own Moodle credentials — never commit these.
+.env
+scripts/.moodle_session/
+
+# Per-user sync state (folders chosen, what's ticked, what's downloaded)
+data/

@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; }
+  body { width: 340px; margin: 0; padding: 14px; font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 13px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  h1 img { width: 18px; height: 18px; }
+  .page { font-size: 12px; opacity: .7; margin: 0 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { width: 100%; box-sizing: border-box; padding: 9px 10px; font: inherit; border-radius: 8px; margin-top: 8px; cursor: pointer; border: 0; background: #f98012; color: #fff; font-weight: 600; }
+  button.course { display: flex; gap: 8px; align-items: baseline; text-align: left; background: transparent; color: inherit; border: 1px solid #8885; font-weight: 500; margin-top: 6px; }
+  button.course:hover:not(:disabled) { border-color: #f98012; background: #f9801218; }
+  button.course .code { font-weight: 700; color: #f98012; min-width: 52px; }
+  button:disabled { opacity: .55; cursor: default; }
+  .label { font-size: 12px; opacity: .7; margin-top: 4px; }
+  .box { border: 1px solid #f98012; border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+  .msg { margin-top: 10px; font-size: 13px; }
+  .msg.ok { color: #1a7f37; } .msg.bad { color: #cf222e; }
+  hr { border: 0; border-top: 1px solid #8883; margin: 12px 0; }
+</style>
+<h1><img src="icons/icon32.png" alt="">LMS Sync</h1>
+<div id="app">Loading…</div>
+<script src="popup.js"></script>

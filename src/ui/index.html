@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<!--LMS_TOKEN-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LMS Sync</title>
+<script>try { let t = localStorage.getItem("lms-theme"); t = { light: "paper", dark: "night" }[t] || t;
+  if (["paper", "sepia", "dusk", "night"].includes(t)) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<style>
+  /* Themes, easiest-on-the-eyes first. Default (no choice made) = Paper, or Night if the system is dark. */
+  :root, :root[data-theme="paper"] {          /* Paper: warm cream instead of white */
+    --bg: #f1ebdd; --panel: #f9f5ea; --ink: #2d2a23; --muted: #766f5f; --line: #ddd4bf;
+    --accent: #2f5fc4; --accent-ink: #ffffff; --ok: #2f7a4b; --ok-bg: #e2ebd3;
+    --warn: #96580a; --warn-bg: #f4e4b8; --new: #2f5fc4; --new-bg: #dfe6f1; --lock-bg: #e8e0cc;
+    --err: #a3302a; --err-bg: #f3d9d0; --radius: 10px; color-scheme: light;
+  }
+  :root[data-theme="sepia"] {                 /* Sepia: warmer and darker, like old book paper */
+    --bg: #e3d5b8; --panel: #ece0c6; --ink: #3a2e1d; --muted: #7a6a4f; --line: #cfbf9b;
+    --accent: #8a4b14; --accent-ink: #fbf3df; --ok: #4a7428; --ok-bg: #d9deb8;
+    --warn: #85500a; --warn-bg: #ecd5a0; --new: #2c5b78; --new-bg: #cfdcd6; --lock-bg: #d9c9a4;
+    --err: #962d22; --err-bg: #ebcab9; color-scheme: light;
+  }
+  :root[data-theme="dusk"] {                  /* Dusk: dim grey-blue, soft contrast */
+    --bg: #2a2d34; --panel: #33373f; --ink: #dadde4; --muted: #9aa1ae; --line: #444a56;
+    --accent: #86a5ff; --accent-ink: #10162b; --ok: #7bd39a; --ok-bg: #26392d;
+    --warn: #e8b95a; --warn-bg: #46391f; --new: #94b2ff; --new-bg: #2e3b5c; --lock-bg: #3b404a;
+    --err: #ff9a90; --err-bg: #4a2b29; color-scheme: dark;
+  }
+  :root[data-theme="night"] {                 /* Night: deep dark */
+    --bg: #14171d; --panel: #1c2028; --ink: #e8ebf1; --muted: #98a2b5; --line: #2b313c;
+    --accent: #5b8aff; --accent-ink: #0b1020; --ok: #5fd08a; --ok-bg: #173324;
+    --warn: #f0b24a; --warn-bg: #3a2c10; --new: #7da3ff; --new-bg: #1b2744; --lock-bg: #262c37;
+    --err: #ff8a80; --err-bg: #3b1b19; color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+      --bg: #14171d; --panel: #1c2028; --ink: #e8ebf1; --muted: #98a2b5; --line: #2b313c;
+      --accent: #5b8aff; --accent-ink: #0b1020; --ok: #5fd08a; --ok-bg: #173324;
+      --warn: #f0b24a; --warn-bg: #3a2c10; --new: #7da3ff; --new-bg: #1b2744; --lock-bg: #262c37;
+      --err: #ff8a80; --err-bg: #3b1b19; color-scheme: dark;
+    }
+  }
+  .head { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 4px; margin: 14px 0 -16px; border-bottom: 0; flex-wrap: wrap; }
+  .tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; color: var(--muted); padding: 8px 12px; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .count { display: inline-block; margin-left: 6px; font-size: 11px; padding: 0 7px; border-radius: 99px; background: var(--new-bg); color: var(--new); }
+  .count.warn { background: var(--warn-bg); color: var(--warn); }
+  .dl { display: flex; align-items: flex-start; gap: 10px; padding: 8px 2px; border-top: 1px solid var(--line); }
+  .dl > input { margin-top: 4px; flex: none; }
+  .dl .body { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-start; }
+  .dl .what { flex: 1 1 260px; min-width: 0; word-break: break-word; }
+  .dl .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .dl .when { text-align: right; font-size: 13px; }
+  .dl.settled { opacity: .65; }
+  .dl .sub { font-size: 12px; color: var(--muted); }
+  .chip.soon { background: var(--warn-bg); color: var(--warn); }
+  .chip.overdue { background: var(--err-bg); color: var(--err); }
+  .chip.submitted, .chip.done { background: var(--ok-bg); color: var(--ok); }
+  .chip.upcoming { background: var(--new-bg); color: var(--new); }
+  .chip.past, .chip.no-date { background: var(--lock-bg); color: var(--muted); }
+  .spot { border: 1px dashed var(--line); border-radius: 8px; padding: 10px; margin-top: 8px; }
+  .spot q { display: block; font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+  .card input[type=text], .card input[type=datetime-local] { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  details.ann { border-top: 1px solid var(--line); padding: 8px 2px; }
+  details.ann > summary { cursor: pointer; list-style: none; display: flex; gap: 8px; align-items: baseline; }
+  details.ann > summary::-webkit-details-marker { display: none; }
+  details.ann .nm { flex: 1; word-break: break-word; font-weight: 700; }
+  details.ann .unreaddot { width: 8px; height: 8px; border-radius: 50%; background: var(--new); flex: none; align-self: center; }
+  .annbody { white-space: pre-wrap; word-break: break-word; margin: 0 0 6px; }
+  .indented { margin: 8px 0 6px 4px; padding: 2px 0 2px 14px; border-left: 3px solid var(--line); }
+  .annbody a, .notes a { color: inherit; }
+  .notes { white-space: pre-wrap; word-break: break-word; font-size: 13px; margin-top: 4px; }
+  details.more { margin-top: 4px; font-size: 13px; }
+  details.more > summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+  .filerow { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+  .filerow .nm { flex: 1; word-break: break-word; }
+  .dl .open { margin-left: 8px; }
+  .dform { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%; }
+  .dform textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); resize: vertical; width: 100%; }
+  details.addbox { margin-top: 14px; }
+  details.addbox > summary { cursor: pointer; font-weight: 600; }
+  .item .note { display: block; font-size: 12px; color: var(--muted); }
+  .sec .sec { border-top: 0; }
+  /* account menu */
+  #account { position: relative; }
+  #account > summary { cursor: pointer; list-style: none; }
+  #account > summary::-webkit-details-marker { display: none; }
+  #account .menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 190px; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  #account .menu button { text-align: left; border: 0; }
+  /* signed out */
+  body.signed-out main > aside, body.signed-out #syncAll, body.signed-out #calendarBtn, body.signed-out #daily, body.signed-out #account { display: none; }
+  body.signed-out main { grid-template-columns: minmax(0, 640px); justify-content: center; }
+  body.signed-out #detail { display: block; }
+  body.signed-out .back { display: none; }
+  .steps { padding-left: 20px; } .steps li { margin-bottom: 16px; }
+  .steps li.ok { color: var(--ok); } .steps li.ok b { color: var(--ink); }
+  .steps code { word-break: break-all; }
+  /* calendar side panel */
+  #calendar { position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; width: min(420px, 100%); background: var(--panel);
+    border-left: 1px solid var(--line); box-shadow: -10px 0 30px rgba(0,0,0,.2); overflow-y: auto; padding: 14px 16px 40px; }
+  #calendar[hidden] { display: none; }
+  .calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 8px; text-align: center; }
+  .calgrid .dow { font-size: 11px; color: var(--muted); padding: 2px 0; }
+  .calgrid button { padding: 4px 0 2px; min-height: 40px; display: flex; flex-direction: column; align-items: center; gap: 3px; border-color: transparent; background: transparent; }
+  .calgrid button.out { opacity: .35; }
+  .calgrid button.today { border-color: var(--accent); }
+  .calgrid button.picked { background: var(--new-bg); }
+  .calgrid .dots { display: flex; gap: 2px; height: 6px; }
+  .calgrid .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--new); }
+  .calgrid .dots i.soon, .calgrid .dots i.overdue { background: var(--warn); }
+  .calgrid .dots i.submitted, .calgrid .dots i.done, .calgrid .dots i.past { background: var(--muted); opacity: .6; }
+  .agenda h4 { margin: 14px 0 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .agenda button.ev { display: flex; width: 100%; gap: 10px; align-items: baseline; text-align: left; margin-bottom: 6px; }
+  .agenda .ev .t { font-size: 12px; color: var(--muted); min-width: 58px; }
+  .agenda .ev .nm { flex: 1; word-break: break-word; }
+  .agenda .ev.settled { opacity: .6; }
+
+  #theme { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; }
+  #theme .dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--muted); flex: none; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+           padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: -.01em; }
+  .spacer { flex: 1; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--lock-bg); color: var(--muted); }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.bad { background: var(--err-bg); color: var(--err); }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+           padding: 6px 12px; border-radius: 8px; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .bar { display: none; margin: 14px 20px 0; padding: 10px 14px; border-radius: var(--radius); align-items: center; gap: 12px; }
+  .bar.show { display: flex; }
+  #banner { background: var(--err-bg); color: var(--err); }
+  #lockedBar { background: var(--warn-bg); color: var(--warn); }
+  main { display: grid; grid-template-columns: 310px 1fr; gap: 20px; padding: 20px; align-items: start; }
+  aside { position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow: auto;
+          background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+  aside input[type=search] { width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+                             background: var(--bg); color: var(--ink); font: inherit; margin-bottom: 8px; }
+  details.term > summary { cursor: pointer; padding: 6px 4px; font-weight: 600; color: var(--muted);
+                           font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  #updateBar { background: var(--new-bg); color: var(--ink); }
+  .grouphead { display: flex; align-items: baseline; gap: 8px; padding: 8px 4px 4px; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ok); }
+  .grouphead.other { color: var(--muted); margin-top: 10px; border-top: 1px solid var(--line); }
+  .crow { display: flex; align-items: flex-start; border-radius: 8px; }
+  .crow > input { flex: none; margin: 12px 0 0 6px; cursor: pointer; width: 15px; height: 15px; }
+  .crow .course { flex: 1; min-width: 0; }
+  .crow.active { background: var(--new-bg); }
+  .crow.active .course:hover { background: transparent; }
+  .hint { font-size: 12px; color: var(--muted); padding: 4px 6px 8px; }
+  .endednote { font-size: 12px; padding: 8px; margin: 4px 0; border-radius: 8px; background: var(--warn-bg); color: var(--warn); }
+  #modal { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #modal[hidden] { display: none; }
+  #modal .box { background: var(--panel); border-radius: 12px; padding: 18px; max-width: 460px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,.35); }
+  #modal code { word-break: break-all; font-size: 12px; }
+  #account .menu .ver { font-size: 12px; color: var(--muted); padding: 6px 8px 2px; border-top: 1px solid var(--line); margin-top: 2px; }
+  #account .menu label { font-size: 13px; padding: 4px 8px; cursor: pointer; }
+  .course { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 8px; }
+  .course:hover { background: var(--bg); }
+  .course .nm { font-weight: 500; display: block; }
+  .course .meta { font-size: 12px; color: var(--muted); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 5px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 2px; font-size: 20px; letter-spacing: -.01em; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .folder input { flex: 1; min-width: 240px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+                  background: var(--bg); color: var(--ink); font: 13px ui-monospace, Menlo, monospace; }
+  @media (max-width: 600px) { .sec .items { margin-left: 8px; padding-left: 12px; } .item .sz { min-width: 0; } .item .nm { min-width: 0; } }
+  .folder input[type=checkbox] { flex: none; min-width: 0; width: auto; padding: 0; }
+  .folder label.row { flex-wrap: nowrap; align-items: flex-start; }
+  .folder.unset { border-color: var(--warn); }
+  .folder .state { margin-top: 6px; font-size: 12px; }
+  .folder .state.ok { color: var(--ok); } .folder .state.todo { color: var(--warn); }
+  .flags { background: var(--warn-bg); color: var(--warn); }
+  .flags .f { display: flex; gap: 10px; align-items: center; padding: 3px 0; }
+  .toolbar label { font-weight: 600; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  details.sec { border-top: 1px solid var(--line); }
+  details.sec:first-of-type { border-top: 0; }
+  details.sec > summary { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 2px; list-style: none; }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary::before { content: "▸"; color: var(--muted); width: 12px; }
+  details.sec[open] > summary::before { content: "▾"; }
+  .sec .nm { font-weight: 600; flex: 1; }
+  .sec .items { margin: 0 0 8px 20px; padding-left: 22px; border-left: 2px solid var(--line); }
+  .open { color: var(--muted); margin-left: 6px; text-decoration: none; font-size: 12px; white-space: nowrap; }
+  .open:hover { text-decoration: underline; }
+  .cap { margin-left: 8px; font-size: 12px; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 5px 4px; border-radius: 6px; }
+  .item:hover { background: var(--bg); }
+  .item .nm { flex: 1; word-break: break-word; }
+  .item .sz { color: var(--muted); font-size: 12px; min-width: 62px; text-align: right; }
+  .item .dt { color: var(--muted); font-size: 12px; min-width: 82px; text-align: right; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 99px; min-width: 76px; text-align: center; }
+  .chip.downloaded { background: var(--ok-bg); color: var(--ok); }
+  .chip.new { background: var(--new-bg); color: var(--new); }
+  .chip.changed { background: var(--warn-bg); color: var(--warn); }
+  .chip.locked { background: var(--lock-bg); color: var(--muted); }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex: none; }
+  .result { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: var(--ok-bg); color: var(--ok); }
+  .result.bad { background: var(--err-bg); color: var(--err); }
+  .empty { text-align: center; color: var(--muted); padding: 80px 20px; }
+  .spin { display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: -3px; border-radius: 50%;
+          border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .back { display: none; margin-bottom: 12px; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+           padding: 9px 16px; border-radius: 99px; display: none; max-width: 80vw; z-index: 9; }
+  /* Narrow window: show either the course list or the opened course, never both stacked
+     (stacked, an opened course lands far below a long list and looks like nothing happened). */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    aside { position: static; max-height: none; }
+    body.has-course main > aside { display: none; }
+    body:not(.has-course) #detail { display: none; }
+    .back { display: inline-block; }
+    .item .dt { display: none; }
+  }
+  .item { flex-wrap: wrap; }
+  .item .nm { flex: 1 1 240px; min-width: 0; }
+  .item .sz, .item .dt { white-space: nowrap; }
+  .foldbox > summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .foldbox > summary code { word-break: break-all; font-size: 12px; }
+  .foldbox[open] > summary { margin-bottom: 10px; }
+  @media (max-width: 600px) {
+    header { position: static; gap: 8px; padding: 10px 16px; }
+    header button, #theme { font-size: 13px; padding: 5px 9px; }
+    #daily { display: none !important; }
+    .item .nm { flex-basis: calc(100% - 34px); }
+    .item .sz { margin-left: 34px; text-align: left; }
+    .dl .when { text-align: left; }
+    details.ann > summary { flex-wrap: wrap; }
+    details.ann .nm { flex-basis: calc(100% - 20px); }
+    details.ann > summary .muted { margin-left: 16px; }
+    .tabs button { font-size: 13px; padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>LMS Sync</h1>
+  <details id="account"><summary id="status" class="pill">checking…</summary>
+    <div class="menu"><button id="relogin">Log in again</button><button id="logout">Log out</button>
+      <div class="ver" id="verLabel"></div><button id="checkUpdate">Check for updates</button>
+      <label id="autoRow"><input type="checkbox" id="autoUpdate"> Update automatically</label></div></details>
+  <span id="daily" class="pill" style="display:none"></span>
+  <span class="spacer"></span>
+  <button id="calendarBtn">Calendar</button>
+  <button id="syncAll" title="Download what's new for every course in your syncing list">Sync now</button>
+  <button id="theme" aria-label="Switch between light and dark theme"></button>
+</header>
+<div id="banner" class="bar"><span id="bannerText"></span><span class="spacer"></span><button id="renew">Log in</button></div>
+<div id="updateBar" class="bar"><span id="updateText"></span><span class="spacer"></span><button id="updateNotes">What's new</button><button id="updateNow">Update now</button></div>
+<div id="lockedBar" class="bar"><span id="lockedText"></span><span class="spacer"></span><button id="fetchLocked">Fetch them now</button></div>
+<main>
+  <aside><input id="search" type="search" placeholder="Search courses…"><div id="list">Loading…</div></aside>
+  <section id="detail"><div class="empty">Pick a course on the left.</div></section>
+</main>
+<div id="calendar" hidden role="dialog" aria-label="Calendar of deadlines"></div>
+<div id="modal" hidden role="dialog" aria-modal="true"><div class="box" id="modalBox"></div></div>
+<div id="toast"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const S = { openTerms: new Set(), os: "mac", tab: "files", openAnn: new Set(), openDl: new Set(), drafts: {}, editing: null, addOpen: false, cal: {}, extensionDir: "", courses: [], detail: null, sel: null, current: null, open: new Set(), result: null, saveTimer: null, busy: false };
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.code === "auth") showBanner("Moodle login expired — renew it to continue.");
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function toast(msg, ms = 3500) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", ms);
+}
+function showBanner(msg, login = true) { $("#bannerText").textContent = msg; $("#renew").style.display = login ? "" : "none"; $("#banner").classList.add("show"); }
+function hideBanner() { $("#banner").classList.remove("show"); }
+
+const fmtSize = n => !n ? "" : n < 1024 ? n + " B" : n < 1048576 ? Math.round(n / 1024) + " KB" : (n / 1048576).toFixed(1) + " MB";
+const fmtDate = t => t ? new Date(t * 1000).toISOString().slice(0, 10) : "";
+const baseName = p => p ? p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : "";
+const shortPath = p => (p || "").replace(/^(\/Users\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)/, "~");
+const suggestLabel = p => p.replace(/^.*[\\/]ISB Courses[\\/]/, "…/");
+const trashName = () => S.os === "windows" ? "Recycle Bin" : "Trash";
+
+/* ---- selection model: course | sections | items, minus excluded ---- */
+const parentOf = sid => S.detail?.sections.find(s => s.id === sid)?.parent || "";
+const childrenOf = sid => S.detail.sections.filter(s => s.parent === sid);
+const covered = sid => S.sel.course || S.sel.sections.includes(sid) || S.sel.sections.includes(parentOf(sid));  // a ticked section covers its subsections
+const isSel = (item, sid) => !S.sel.excluded.includes(item.key) && (covered(sid) || S.sel.items.includes(item.key));
+const without = (arr, keys) => arr.filter(k => !keys.includes(k));
+
+function setCourse(on) {
+  S.sel = on ? { ...S.sel, course: true, excluded: [] } : { course: false, sections: [], items: [], excluded: [] };
+}
+function setSection(sec, on) {
+  const family = [sec, ...childrenOf(sec.id)], ids = family.map(s => s.id);
+  const keys = family.flatMap(s => s.items.map(i => i.key));
+  S.sel.items = without(S.sel.items, keys);
+  S.sel.sections = without(S.sel.sections, ids);
+  if (on) {
+    S.sel.sections.push(sec.id);
+    S.sel.excluded = without(S.sel.excluded, keys);
+  } else {
+    const stillCovered = S.sel.course || S.sel.sections.includes(sec.parent);
+    S.sel.excluded = stillCovered ? [...new Set([...S.sel.excluded, ...keys])] : without(S.sel.excluded, keys);
+  }
+}
+function setItem(sec, item, on) {
+  if (on) {
+    S.sel.excluded = without(S.sel.excluded, [item.key]);
+    if (!covered(sec.id) && !S.sel.items.includes(item.key)) S.sel.items.push(item.key);
+  } else {
+    S.sel.items = without(S.sel.items, [item.key]);
+    if (covered(sec.id) && !S.sel.excluded.includes(item.key)) S.sel.excluded.push(item.key);
+  }
+}
+function persistSelection() {
+  const c = S.courses.find(c => c.id === S.current);
+  if (c) {
+    c.subscribed = S.sel.course || S.sel.sections.length > 0 || S.sel.items.length > 0; autoSync(c);
+    if (S.detail) Object.assign(S.detail.course, { subscribed: c.subscribed, syncing: c.syncing });
+  }
+  renderList();
+  clearTimeout(S.saveTimer);
+  S.saveTimer = setTimeout(() => api(`/api/course/${S.current}/selection`, S.sel).catch(e => toast(e.message)), 250);
+}
+
+/* ---- sidebar ---- */
+const endedOn = c => new Date(c.enddate * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+const courseRow = c => `
+  <div class="crow ${c.id === S.current ? "active" : ""}">
+    <input type="checkbox" data-sync="${c.id}" ${c.syncing ? "checked" : ""} aria-label="Sync ${esc(c.name)}"
+      title="${c.syncing ? "In your syncing list — untick to stop syncing it" : c.folder ? "Tick to start syncing this course" : "Tick to start syncing (you'll pick a folder first)"}">
+    <button class="course" data-id="${c.id}">
+      <span class="nm">${esc(c.name)}</span>
+      <span class="meta">${[esc(c.code), esc(c.term), c.folder ? c.downloaded + " file" + (c.downloaded === 1 ? "" : "s") : "",
+        c.folder && baseName(c.folder) !== c.code ? esc(baseName(c.folder)) : "", c.flags ? c.flags + " changed" : "",
+        c.locked_waiting ? c.locked_waiting + " need sign-in" : "", c.syncing && c.ended ? "ended " + endedOn(c) : ""].filter(Boolean).join(" · ")}${tabCounts(c)}</span>
+    </button>
+  </div>`;
+
+function renderList() {
+  const q = $("#search").value.trim().toLowerCase();
+  const shown = S.courses.filter(c => !q || (c.name + " " + c.code).toLowerCase().includes(q));
+  const newestFirst = (a, b) => b.startdate - a.startdate || a.name.localeCompare(b.name);
+  const syncing = shown.filter(c => c.syncing).sort(newestFirst);
+  const ended = S.courses.filter(c => c.syncing && c.ended);
+  const groups = {};
+  for (const c of shown) if (!c.syncing) (groups[c.term] ||= []).push(c);
+  const ordered = Object.entries(groups).sort((a, b) =>
+    Math.max(...b[1].map(c => c.startdate)) - Math.max(...a[1].map(c => c.startdate)));
+  $("#list").innerHTML = `
+    <div class="grouphead">Syncing · ${S.courses.filter(c => c.syncing).length}</div>
+    ${ended.length ? `<div class="endednote">${ended.length} course${ended.length === 1 ? " has" : "s have"} ended.
+      <button class="cap" data-stopended>Stop syncing ${ended.length === 1 ? "it" : "them"}</button></div>` : ""}
+    ${syncing.map(courseRow).join("") || `<div class="hint">${q ? "No match here." : "Tick a course below to download its files and track its deadlines every day."}</div>`}
+    <div class="grouphead other">Other courses</div>
+    ${ordered.map(([term, cs], i) => `
+      <details class="term" data-term="${esc(term)}" ${(S.openTerms.has(term) || (i === 0 && !S.courses.some(c => c.syncing))) || q ? "open" : ""}><summary>${esc(term)} · ${cs.length}</summary>
+        ${cs.sort(newestFirst).map(courseRow).join("")}
+      </details>`).join("") || `<div class="hint">${q ? "No courses match." : "None."}</div>`}`;
+
+  const locked = S.courses.reduce((n, c) => n + (c.locked_waiting || 0), 0);
+  $("#lockedText").textContent = `${locked} file(s) in your syncing courses need a sign-in — they're fetched through your own Chrome.`;
+  $("#lockedBar").classList.toggle("show", locked > 0);
+}
+
+/* ---- the syncing list ---- */
+// Until the user flips the switch, a course syncs when it has a folder and something ticked.
+function autoSync(c) { if (c && c.sync_setting === null) c.syncing = !!(c.folder && c.subscribed); }
+
+function closeModal() { $("#modal").hidden = true; }
+function askFolder(c) {
+  $("#modalBox").innerHTML = `<b>${esc(c.name)}</b>
+    <p class="muted">Choose where its files should go. Syncing starts once it has a folder.</p>
+    <p><code>${esc(shortPath(c.suggested_folder))}</code></p>
+    <div class="row"><button class="primary" data-folder="suggested">Use this folder</button><button data-folder="browse">Choose another…</button>
+      <span class="spacer"></span><button data-folder="cancel">Cancel</button></div>`;
+  $("#modal").hidden = false;
+  $("#modalBox").onclick = async e => {
+    const choice = e.target.dataset.folder; if (!choice) return;
+    if (choice === "cancel") return closeModal();
+    try {
+      let path = c.suggested_folder;
+      if (choice === "browse") {
+        const r = await api("/api/pick-folder", { start: path.replace(/[\\/][^\\/]*$/, "") });
+        if (!r.path) return;
+        path = r.path;
+      }
+      await api(`/api/course/${c.id}/folder`, { path });
+      closeModal(); await setSyncing(c.id, true);
+    } catch (err) { toast(err.message, 6000); }
+  };
+}
+
+async function reloadCourses() {
+  S.courses = await api("/api/courses"); renderList();
+}
+
+async function setSyncing(id, on) {
+  const r = await api(`/api/course/${id}/syncing`, { value: on });
+  await reloadCourses();
+  if (S.current === id) { if (S.detail) await refreshDetail(); else renderDetail(); }
+  if (!on) { toast(`Stopped syncing ${r.code}. Its folder and files are kept.`, 6000); return; }
+  toast(`${r.code} added to syncing${r.took_whole_course ? " — the whole course (change that under Files)" : ""}. Downloading…`, 8000);
+  const s = await api(`/api/course/${id}/sync`, {});
+  toast(s.errors.length ? `${r.code}: ${s.new.length} new · ${s.errors[0]}` : `${r.code}: ${s.new.length} new file(s) downloaded`, 7000);
+  await fetchPending(s.pending_login || []);
+  await reloadCourses();
+  if (S.current === id && S.detail) await refreshDetail();
+}
+
+$("#list").addEventListener("change", async e => {
+  const box = e.target; if (box.dataset.sync === undefined) return;
+  const c = S.courses.find(c => c.id === +box.dataset.sync);
+  if (box.checked && !c.folder) { box.checked = false; return askFolder(c); }
+  box.disabled = true;
+  try { await setSyncing(c.id, box.checked); }
+  catch (err) { toast(err.message, 6000); await reloadCourses(); }
+});
+$("#list").addEventListener("toggle", e => {
+  const term = e.target.dataset?.term; if (term === undefined || $("#search").value) return;
+  e.target.open ? S.openTerms.add(term) : S.openTerms.delete(term);
+}, true);
+
+/* ---- course detail ---- */
+const backButton = '<button class="back" data-back>← All courses</button>';
+
+async function openCourse(id) {
+  S.current = id; S.result = null; S.detail = null; S.filesError = null;
+  S.board = null; S.boardError = null; S.boardLoading = false; S.openAnn = new Set();
+  S.openDl = new Set(); S.drafts = {}; S.editing = null; S.addOpen = false; S.folderOpen = false;
+  document.body.classList.add("has-course");
+  renderList(); renderDetail();
+  scrollTo({ top: 0 });
+  if (S.tab === "board") loadBoard(id);
+  try {
+    const d = await api(`/api/course/${id}`);
+    if (S.current !== id) return;  // user already clicked another course
+    S.detail = d;
+    S.sel = { course: false, sections: [], items: [], excluded: [], ...d.selection };
+    const total = d.sections.reduce((n, s) => n + s.items.length, 0);
+    S.open = new Set(total <= 40 ? d.sections.map(s => s.id) : []);
+  } catch (e) { if (S.current !== id) return; S.filesError = e.message; }
+  if (S.tab === "files") renderDetail();
+}
+
+const tabCounts = c => `${c.unread ? `<span class="count">${c.unread} unread</span>` : ""}${c.due_soon ? `<span class="count warn">${c.due_soon} due soon</span>` : ""}`;
+
+function renderDetail() {
+  const summary = S.courses.find(c => c.id === S.current);
+  if (!summary) return;
+  const c = S.detail?.course || summary;
+  const header = backButton + `
+    <div class="card">
+      <div class="head"><div style="flex:1"><h2>${esc(c.name)}</h2>
+        <div class="muted">${esc(c.code)} · ${esc(c.term)}</div></div>
+        <button id="openFolder" ${c.folder ? "" : "disabled"} title="${esc(c.folder || "Choose a folder first")}">Open folder</button></div>
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="files" aria-selected="${S.tab !== "board"}">Files</button>
+        <button role="tab" data-tab="board" aria-selected="${S.tab === "board"}">Announcements &amp; deadlines${tabCounts(summary)}</button>
+      </div>
+    </div>`;
+  if (S.tab === "board") { $("#detail").innerHTML = header + boardHtml(); return; }
+  if (S.filesError) { $("#detail").innerHTML = header + `<div class="empty">${esc(S.filesError)}</div>`; return; }
+  if (!S.detail) { $("#detail").innerHTML = header + '<div class="empty"><span class="spin"></span>Loading from Moodle… some courses take up to 10 seconds.</div>'; return; }
+  renderFiles(header);
+}
+
+function itemRow(i, sec) {
+  return `<label class="item">
+          <input type="checkbox" data-item="${esc(i.key)}" data-sid="${esc(sec.id)}" ${isSel(i, sec.id) ? "checked" : ""}>
+          <span class="nm">${esc(i.name)}${i.note ? `<span class="note">${esc(i.note)}</span>` : ""}${i.kind === "link" && /^https?:\/\//i.test(i.url) ? `<a class="open" href="${esc(i.url)}" target="_blank" rel="noopener noreferrer" title="Open the original link: ${esc(i.url)}">↗ open link</a>${capturable(i) ? (hasExt()
+            ? `<button class="cap" data-ext="${esc(i.key)}" title="Opens the link in a new tab of this Chrome and saves it (files, signed-in files and pages). For a site with a human check it tries once; if blocked, finish the check in the tab and click the LMS Sync button in Chrome's toolbar.">Capture in my Chrome</button>`
+            : `<button class="cap" data-noext title="Install the LMS Sync Chrome extension (extension/ folder: chrome://extensions → Developer mode → Load unpacked) to capture this in your own Chrome.">Needs the extension</button>`) +
+          `<button class="cap" data-import="${esc(i.key)}" title="Save the page or file yourself, then pick it here.">Import file…</button>` : ""}` : ""}</span>
+          <span class="sz">${fmtSize(i.size)}</span><span class="dt">${fmtDate(i.timemodified)}</span>
+          <span class="chip ${i.status}" title="${esc(i.saved_as ? "saved as " + i.saved_as : i.status === "locked" ? "Needs a sign-in (Moodle or ISB SharePoint) to download" : "")}">${{
+            downloaded: "✓ saved", new: "new", changed: "changed", locked: "needs login" }[i.status]}</span>${i.saved_as ? `<button class="cap" data-openfile="${esc(i.key)}" title="Open the saved file">Open</button>` : ""}${i.saved_as ? `<button class="cap redo" data-redo="${esc(i.key)}" data-sid="${esc(sec.id)}" title="Move the saved file to the Trash / Recycle Bin and download it again on the next sync">Delete file…</button>` : ""}
+        </label>`;
+}
+
+function sectionHtml(sec) {
+  const kids = childrenOf(sec.id);
+  const tree = [sec, ...kids].flatMap(x => x.items.map(i => ({ i, sid: x.id })));
+  const n = tree.filter(({ i, sid }) => isSel(i, sid)).length;
+  return `<details class="sec" data-sid="${esc(sec.id)}" ${S.open.has(sec.id) ? "open" : ""}>
+    <summary><input type="checkbox" data-sec="${esc(sec.id)}" data-tri="${n === 0 ? 0 : n === tree.length ? 1 : 2}">
+      <span class="nm">${esc(sec.name)}</span><span class="muted">${n}/${tree.length}</span></summary>
+    <div class="items">${sec.items.map(i => itemRow(i, sec)).join("")}${kids.map(sectionHtml).join("")}</div></details>`;
+}
+
+function renderFiles(header) {
+  const d = S.detail, c = d.course;
+  const all = d.sections.flatMap(s => s.items.map(i => ({ i, sid: s.id })));
+  const selected = all.filter(({ i, sid }) => isSel(i, sid));
+  const pending = selected.filter(({ i }) => i.status !== "downloaded");
+  const lockedPending = pending.filter(({ i }) => i.status === "locked").length;
+  const canDownload = c.folder && pending.length > 0;
+  const folderNote = c.folder
+    ? `<div class="state ok">✓ Saved — this course will keep downloading here, and it's remembered next time you open this.</div>`
+    : `<div class="state todo">No folder yet. Click “Use …” for the suggested one, or Browse… to pick your own, then it's saved automatically.</div>`;
+
+  $("#detail").innerHTML = header + `
+    <div class="card">
+      <details class="foldbox" ${!c.folder || S.folderOpen ? "open" : ""}><summary><b>Folder</b>
+        <code>${esc(c.folder ? shortPath(c.folder) : "not chosen yet")}</code><span class="muted" style="font-size:12px">${c.organize ? "section folders" : "flat"} · change</span></summary>
+      <div class="folder ${c.folder ? "" : "unset"}">
+        <div class="muted" style="margin-bottom:4px">Course folder — downloads go in here. Move files wherever you like afterwards.</div>
+        <div class="row">
+          <input id="folder" value="${esc(c.folder || "")}" placeholder="${esc(d.suggested_folder)}" spellcheck="false">
+          <button id="browse">Browse…</button>
+          <button id="suggest">Use ${esc(suggestLabel(d.suggested_folder))}</button>
+          <button id="saveFolder">Save</button>
+        </div>
+        ${folderNote}
+        <label class="row" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="organize" ${c.organize ? "checked" : ""}>
+          <span>${c.organize ? "Sort into <b>Moodle / section name</b> folders — like on Moodle (General, Slides…)" : "Sort into Moodle section folders"}</span></label>
+        <label class="row" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="inExt" ${c.in_extension ? "checked" : ""}>
+          <span>Show in the Chrome extension’s “add to a course” list</span></label>
+        <div class="muted" style="font-size:12px">${c.organize ? "New files land in <code>Moodle/&lt;section&gt;/</code>. Untick to drop them flat in the course folder." : "Off: new files land flat in the course folder."}</div>
+      </div>
+      </details>
+    </div>
+    ${d.flags.length ? `<div class="card flags"><b>Changed on Moodle since you downloaded</b>
+      ${d.flags.map(f => `<div class="f"><span style="flex:1">${esc(f.name)} → new copy saved as <b>${esc(f.saved_as)}</b></span>
+        <button data-dismiss="${esc(f.key)}">Dismiss</button></div>`).join("")}
+      <div style="margin-top:6px"><button data-dismiss="">Dismiss all</button></div></div>` : ""}
+    <div class="card toolbar">
+      <div class="row">
+        <label><input type="checkbox" id="whole" data-tri="${selected.length === 0 ? 0 : selected.length === all.length ? 1 : 2}">
+          Keep the whole course</label>
+        <span class="muted">${selected.length} of ${all.length} files ticked · ${pending.length} to download</span>
+        <span class="spacer"></span>
+        <button class="primary" id="download" ${canDownload && !S.busy ? "" : "disabled"}>${S.busy ? "Downloading…" : "Download now"}</button>
+      </div>
+      ${!c.folder ? '<div class="muted" style="margin-top:8px">Choose a folder first.</div>' : ""}
+      ${c.folder && !c.syncing ? '<div class="muted" style="margin-top:8px">Not in your syncing list — the daily sync skips this course. <button class="cap" id="startSync">Start syncing</button></div>' : ""}
+      ${lockedPending && c.folder ? `<div class="muted" style="margin-top:8px">${lockedPending} signed-in file(s): fetched through your own Chrome (the LMS Sync extension) when you press Download.</div>` : ""}
+      ${S.result ? `<div class="result ${S.result.bad ? "bad" : ""}">${S.result.html}</div>` : ""}
+    </div>
+    <div class="card">${d.sections.filter(s => !s.parent).map(sectionHtml).join("") || '<div class="muted">Nothing downloadable in this course yet.</div>'}</div>`;
+
+  for (const el of document.querySelectorAll("[data-tri]")) {
+    const v = +el.dataset.tri; el.checked = v === 1; el.indeterminate = v === 2;
+  }
+}
+
+/* ---- announcements & deadlines tab ---- */
+const fmtWhen = t => t ? new Date(t * 1000).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "no date";
+function fromNow(t) {
+  const s = t - Date.now() / 1000, a = Math.abs(s);
+  const n = a < 3600 ? [Math.max(1, Math.round(a / 60)), "min"] : a < 172800 ? [Math.round(a / 3600), "hour"] : [Math.round(a / 86400), "day"];
+  const text = `${n[0]} ${n[1]}${n[0] === 1 || n[1] === "min" ? "" : "s"}`;
+  return s >= 0 ? "in " + text : text + " ago";
+}
+function statusOf(e) {  // same rule as board.status_of on the server
+  if (e.submitted) return "submitted";
+  if (e.done) return "done";
+  if (!e.due) return "no-date";
+  const left = e.due - Date.now() / 1000;
+  if (left < 0) return e.source === "manual" || e.source === "event" || e.gone ? "past" : "overdue";
+  return left <= 172800 ? "soon" : "upcoming";
+}
+const STATUS_TEXT = { submitted: "✓ submitted", done: "✓ done", soon: "due soon", upcoming: "upcoming", overdue: "not submitted", past: "past", "no-date": "no date" };
+const SOURCE_TEXT = { assignment: "assignment", quiz: "quiz", event: "activity", manual: "added by you" };
+const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : "";
+const extLink = (u, label) => safeUrl(u) ? `<a class="open" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${label}</a>` : "";
+const localInput = t => { const d = new Date(t * 1000); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+
+const webLinks = links => (links || []).map(l => typeof l === "string" ? { label: l, url: l } : l)
+  .map(l => `<div>${extLink(l.url, "↗ " + esc(l.label))}</div>`).join("");
+const fileRows = files => files.map(f => `<div class="filerow"><span class="nm">${esc(f.name)}</span>
+  ${f.saved ? `<button class="cap" data-openfile="${esc(f.key)}">Open</button>` : `<button class="cap" data-getfile="${esc(f.key)}">Download</button>`}</div>`).join("");
+
+function deadlineDetails(e) {
+  const files = e.files || [], related = e.related || [];
+  if (!(e.instructions || files.length || related.length || (e.source !== "manual" && e.links?.length))) return "";
+  const parts = [e.instructions ? "instructions" : "", files.length ? `${files.length} attached` : "",
+    related.length ? `${related.length} file(s) in the same section` : ""].filter(Boolean).join(" · ") || "links";
+  return `<details class="more" data-dl="${esc(e.key)}" ${S.openDl.has(e.key) ? "open" : ""}><summary>${esc(parts)}</summary>
+    <div class="indented">
+      ${e.instructions ? `<div class="annbody">${esc(e.instructions)}</div>` : ""}${webLinks(e.links)}
+      ${files.length ? `<div class="muted" style="margin-top:6px">Attached to the assignment</div>${fileRows(files)}` : ""}
+      ${related.length ? `<div class="muted" style="margin-top:6px">Other files in the same course section</div>${fileRows(related)}` : ""}
+    </div></details>`;
+}
+
+const draft = (form, field, fallback) => S.drafts[form]?.[field] ?? fallback;
+function deadlineForm(form, e = {}) {
+  return `<div class="dform" data-form="${esc(form)}">
+    <div class="row"><input type="text" data-f="title" placeholder="What is due? (e.g. Group assignment 1)" style="flex:1;min-width:200px" value="${esc(draft(form, "title", e.title || ""))}">
+      <input type="datetime-local" data-f="due" value="${esc(draft(form, "due", e.due ? localInput(e.due) : ""))}"></div>
+    <textarea data-f="notes" rows="3" placeholder="Notes (optional) — instructions, who is doing what…">${esc(draft(form, "notes", e.notes || ""))}</textarea>
+    <textarea data-f="links" rows="2" placeholder="Links (optional), one per line">${esc(draft(form, "links", (e.links || []).join("\n")))}</textarea>
+    <div class="row"><span class="spacer"></span>${form === "new" ? "" : '<button data-canceledit>Cancel</button>'}
+      <button class="primary" data-saveform="${esc(form)}">${form === "new" ? "Add deadline" : "Save"}</button></div>
+  </div>`;
+}
+
+function deadlineRow(e) {
+  if (S.editing === e.key) return `<div class="dl"><div class="body">${deadlineForm(e.key, e)}</div></div>`;
+  const settled = ["submitted", "done", "past"].includes(e.status);
+  const notes = [SOURCE_TEXT[e.source], e.team ? "team" : "", e.previous_due ? "date changed from " + fmtWhen(e.previous_due) : "",
+    e.gone ? "no longer shown on Moodle (kept from earlier)" : ""].filter(Boolean).join(" · ");
+  return `<div class="dl ${settled ? "settled" : ""}">
+    <input type="checkbox" data-done="${esc(e.key)}" ${e.submitted || e.done ? "checked" : ""} ${e.submitted ? "disabled" : ""} title="${e.submitted ? "Submitted on Moodle" : "Mark as done"}">
+    <div class="body"><div class="what">${esc(e.title)}${extLink(e.url, "↗ open")}<div class="sub">${esc(notes)}</div>
+      ${e.source === "manual" && e.notes ? `<div class="notes">${esc(e.notes)}</div>` : ""}${e.source === "manual" ? webLinks(e.links) : ""}
+      ${deadlineDetails(e)}</div>
+    <div class="meta"><div class="when">${esc(fmtWhen(e.due))}<div class="sub">${e.due ? esc(fromNow(e.due)) : ""}</div></div>
+    <span class="chip ${e.status}">${STATUS_TEXT[e.status]}</span>
+    ${e.source === "manual" ? `<button class="cap" data-edit="${esc(e.key)}">Edit</button>` : ""}
+    ${e.source === "manual" || e.gone ? `<button class="cap" data-remove="${esc(e.key)}" title="Stop tracking this">Remove</button>` : ""}
+    </div></div>
+  </div>`;
+}
+
+function boardHtml() {
+  if (S.boardError) return `<div class="empty">${esc(S.boardError)}<div style="margin-top:10px"><button id="boardRefresh">Try again</button></div></div>`;
+  const b = S.board;
+  if (!b) return '<div class="empty"><span class="spin"></span>Checking Moodle for announcements and deadlines…</div>';
+  const open = b.deadlines.filter(e => !["submitted", "done", "past"].includes(e.status));
+  const finished = b.deadlines.filter(e => ["submitted", "done", "past"].includes(e.status));
+  const unread = b.announcements.filter(a => a.unread).length;
+  return `
+    <div class="card">
+      <div class="row"><b>Deadlines</b><span class="spacer"></span><span class="muted">checked ${esc(new Date(b.checked_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</span>
+        <button id="boardRefresh" ${S.boardLoading ? "disabled" : ""}>${S.boardLoading ? "Checking…" : "Refresh"}</button></div>
+      ${b.problems.map(p => `<div class="result bad">${esc(p)}</div>`).join("")}
+      ${open.map(deadlineRow).join("") || '<div class="muted" style="margin-top:8px">Nothing open right now.</div>'}
+      ${finished.length ? `<div class="muted" style="margin-top:14px">Finished</div>${finished.map(deadlineRow).join("")}` : ""}
+      ${b.hidden_assignments ? `<div class="muted" style="margin-top:10px;font-size:12px">Moodle is hiding ${b.hidden_assignments} assignment(s) in this course from you (restricted or closed). Ones seen earlier stay listed; for any other, add the date below.</div>` : ""}
+      ${b.suggestions.length ? `<div style="margin-top:14px"><b>Dates spotted on Moodle</b> <span class="muted">— not tracked until you add them</span>
+        ${b.suggestions.map(x => `<div class="spot" data-spot="${esc(x.key)}">
+          <div>${esc(x.title)} <span class="muted" style="font-size:12px">· from ${esc(x.where)}</span></div><q>${esc(x.snippet)}</q>
+          <div class="row"><input type="datetime-local" value="${localInput(x.due)}">
+            ${x.time_assumed ? '<span class="muted" style="font-size:12px">no time given — check it</span>' : ""}
+            <span class="spacer"></span><button data-track="${esc(x.key)}">Track</button><button data-skip="${esc(x.key)}">Dismiss</button></div></div>`).join("")}</div>` : ""}
+      <details class="addbox" ${S.addOpen ? "open" : ""}><summary>＋ Add your own deadline</summary>${deadlineForm("new")}</details>
+    </div>
+    <div class="card">
+      <div class="row"><b>Announcements</b>${unread ? `<span class="count">${unread} unread</span>` : ""}<span class="spacer"></span>
+        ${unread ? '<button id="readAll">Mark all read</button>' : ""}</div>
+      ${b.announcements.map(a => `<details class="ann ${a.unread ? "unread" : ""}" data-ann="${a.id}" ${S.openAnn.has(a.id) ? "open" : ""}>
+        <summary>${a.unread ? '<span class="unreaddot" title="unread"></span>' : ""}<span class="nm">${esc(a.subject)}</span>
+          <span class="muted" style="font-size:12px">${esc(a.author)} · ${esc(fmtWhen(a.posted))}</span></summary>
+        <div class="indented"><div class="annbody">${esc(a.text)}</div>
+          ${webLinks(a.links)}
+          ${a.attachments.length ? `<div class="muted" style="margin-top:6px">Attached (open on Moodle): ${a.attachments.map(esc).join(", ")}</div>` : ""}
+          <div style="margin-top:6px">${extLink(a.url, "↗ open on Moodle")}</div></div>
+      </details>`).join("") || '<div class="muted" style="margin-top:8px">No announcements yet.</div>'}
+    </div>`;
+}
+
+function syncCounts() {
+  const c = S.courses.find(c => c.id === S.current);
+  if (c && S.board) {
+    c.unread = S.board.announcements.filter(a => a.unread).length;
+    c.due_soon = S.board.deadlines.filter(e => e.status === "soon").length;
+  }
+  renderList();
+}
+
+async function loadBoard(id) {
+  S.boardLoading = true; S.boardError = null; renderDetail();
+  try {
+    const b = await api(`/api/course/${id}/board`);
+    if (S.current !== id) return;
+    S.board = b;
+  } catch (e) { if (S.current !== id) return; S.boardError = e.message; }
+  S.boardLoading = false; syncCounts(); renderDetail();
+}
+
+const boardPost = (action, body) => api(`/api/course/${S.current}/board/${action}`, body);
+
+const readForm = el => Object.fromEntries([...el.querySelectorAll("[data-f]")].map(x => [x.dataset.f, x.value]));
+
+async function boardClick(t) {
+  const b = S.board;
+  if (t.id === "boardRefresh") await loadBoard(S.current);
+  else if (t.id === "readAll") {
+    await boardPost("read", {}); b.announcements.forEach(a => a.unread = false); syncCounts(); renderDetail();
+  } else if (t.dataset.saveform !== undefined) {
+    const form = t.dataset.saveform, f = readForm(t.closest(".dform"));
+    if (!f.title.trim() || !f.due) { toast("Give it a title and a date."); return; }
+    const body = { title: f.title, due: Math.floor(new Date(f.due).getTime() / 1000), notes: f.notes, links: f.links };
+    await boardPost(form === "new" ? "add" : "edit", form === "new" ? body : { ...body, key: form });
+    delete S.drafts[form]; S.editing = null; S.addOpen = false; toast(form === "new" ? "Tracking it" : "Saved"); await loadBoard(S.current);
+  } else if (t.dataset.edit !== undefined) { S.editing = t.dataset.edit; renderDetail(); }
+  else if (t.dataset.canceledit !== undefined) { delete S.drafts[S.editing]; S.editing = null; renderDetail(); }
+  else if (t.dataset.track !== undefined) {
+    const x = b.suggestions.find(x => x.key === t.dataset.track), when = t.closest(".spot").querySelector("input").value;
+    if (!when) { toast("Pick a date first."); return; }
+    t.disabled = true;
+    await boardPost("add", { title: x.title, due: Math.floor(new Date(when).getTime() / 1000), notes: x.snippet, links: safeUrl(x.url) });
+    await boardPost("dismiss", { key: x.key }); toast("Tracking it"); await loadBoard(S.current);
+  } else if (t.dataset.skip !== undefined) {
+    await boardPost("dismiss", { key: t.dataset.skip }); b.suggestions = b.suggestions.filter(x => x.key !== t.dataset.skip); renderDetail();
+  } else if (t.dataset.remove !== undefined) {
+    if (!confirm("Stop tracking this deadline?")) return;
+    await boardPost("remove", { key: t.dataset.remove }); b.deadlines = b.deadlines.filter(e => e.key !== t.dataset.remove); syncCounts(); renderDetail();
+  } else if (t.dataset.getfile !== undefined) {
+    const id = S.current; t.disabled = true; t.textContent = "Downloading…";
+    try {
+      const r = await api(`/api/course/${id}/fetch`, { key: t.dataset.getfile });
+      if (r.new.length) toast("Saved " + r.new.join(", "), 6000); else if (r.errors.length) toast(r.errors[0], 8000);
+      await fetchPending(r.pending_login || []);
+    } finally { if (S.current === id) { await loadBoard(id); refreshDetail().catch(() => {}); } }
+  }
+}
+
+/* ---- calendar side panel: every course's deadlines ---- */
+const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const settledStatus = s => ["submitted", "done", "past"].includes(s);
+
+function renderCalendar() {
+  const panel = $("#calendar"), C = S.cal;
+  if (panel.hidden) return;
+  const all = (C.data?.deadlines || []).map(d => ({ ...d, day: dayKey(new Date(d.due * 1000)) }));
+  const first = C.month, start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));  // weeks start Monday
+  const today = dayKey(new Date());
+  const cells = Array.from({ length: 42 }, (_, n) => { const d = new Date(start); d.setDate(start.getDate() + n); return d; })
+    .filter((d, n) => n < 35 || d.getMonth() === first.getMonth() || cellsNeedSixWeeks(start, first));
+  const grid = cells.map(d => {
+    const key = dayKey(d), due = all.filter(x => x.day === key);
+    return `<button data-day="${key}" class="${d.getMonth() !== first.getMonth() ? "out" : ""} ${key === today ? "today" : ""} ${key === C.day ? "picked" : ""}"
+      title="${esc(due.map(x => x.code + ": " + x.title).join("\n"))}">${d.getDate()}<span class="dots">${due.slice(0, 3).map(x => `<i class="${x.status}"></i>`).join("")}</span></button>`;
+  }).join("");
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const shown = all.filter(x => C.day ? x.day === C.day
+    : C.showDone ? true : !settledStatus(x.status) && (x.due * 1000 >= +startOfToday || x.status === "overdue"));
+  const days = [...new Set(shown.map(x => x.day))];
+  panel.innerHTML = `
+    <div class="row"><b style="font-size:16px">Calendar</b><span class="spacer"></span>
+      <button data-cal="refresh" ${C.loading ? "disabled" : ""}>${C.loading ? "Updating…" : "Refresh"}</button><button data-cal="close" aria-label="Close">✕</button></div>
+    <div class="row" style="margin-top:12px"><button data-cal="prev" aria-label="Previous month">‹</button>
+      <b style="flex:1;text-align:center">${esc(first.toLocaleDateString(undefined, { month: "long", year: "numeric" }))}</b>
+      <button data-cal="next" aria-label="Next month">›</button></div>
+    <div class="calgrid">${["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(d => `<span class="dow">${d}</span>`).join("")}${grid}</div>
+    ${(C.data?.problems || []).map(p => `<div class="result bad">${esc(p)}</div>`).join("")}
+    <div class="row" style="margin-top:12px"><b>${C.day ? esc(new Date(C.day + "T00:00").toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })) : C.showDone ? "All deadlines" : "Coming up"}</b><span class="spacer"></span>
+      ${C.day ? '<button data-cal="allup">Show coming up</button>' : `<label class="muted" style="font-size:12px;cursor:pointer"><input type="checkbox" data-cal="done" ${C.showDone ? "checked" : ""}> include finished</label>`}</div>
+    <div class="agenda">${!C.data ? '<div class="empty"><span class="spin"></span>Loading…</div>' : days.map(day => `
+      <h4>${esc(new Date(day + "T00:00").toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }))}${day === today ? " · today" : ""}</h4>
+      ${shown.filter(x => x.day === day).map(x => `<button class="ev ${settledStatus(x.status) ? "settled" : ""}" data-go="${x.course_id}" title="${esc(x.notes)}">
+        <span class="t">${esc(new Date(x.due * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }))}</span>
+        <span class="nm"><b>${esc(x.code)}</b> · ${esc(x.title)}</span><span class="chip ${x.status}">${STATUS_TEXT[x.status]}</span></button>`).join("")}`).join("")
+      || `<div class="muted" style="margin-top:8px">${C.day ? "Nothing due on this day." : "Nothing coming up. Deadlines appear once a course is in your syncing list or you've opened its Announcements &amp; deadlines tab."}</div>`}</div>`;
+}
+const cellsNeedSixWeeks = (start, first) => { const d = new Date(start); d.setDate(start.getDate() + 35); return d.getMonth() === first.getMonth(); };
+
+async function refreshCalendar() {
+  S.cal.loading = true; renderCalendar();
+  try { S.cal.data = await api("/api/calendar/refresh", {}); S.courses = await api("/api/courses"); renderList(); }
+  catch (e) { toast(e.message, 6000); }
+  S.cal.loading = false; renderCalendar();
+}
+async function openCalendar() {
+  const now = new Date();
+  S.cal = { ...S.cal, month: S.cal.month || new Date(now.getFullYear(), now.getMonth(), 1), day: null };
+  $("#calendar").hidden = false; renderCalendar();
+  try { S.cal.data = await api("/api/calendar"); } catch (e) { toast(e.message, 6000); return; }
+  renderCalendar();
+  const checked = S.cal.data.oldest_check;
+  if (!checked || Date.now() - new Date(checked) > 15 * 60 * 1000) await refreshCalendar();
+}
+$("#calendarBtn").addEventListener("click", () => $("#calendar").hidden ? openCalendar() : ($("#calendar").hidden = true));
+$("#calendar").addEventListener("click", async e => {
+  const t = e.target.closest("[data-cal], [data-day], [data-go]"); if (!t) return;
+  const C = S.cal, shift = n => new Date(C.month.getFullYear(), C.month.getMonth() + n, 1);
+  if (t.dataset.day) { C.day = C.day === t.dataset.day ? null : t.dataset.day; const d = new Date(t.dataset.day + "T00:00"); C.month = new Date(d.getFullYear(), d.getMonth(), 1); }
+  else if (t.dataset.go) { $("#calendar").hidden = true; S.tab = "board"; openCourse(+t.dataset.go); return; }
+  else if (t.dataset.cal === "close") { $("#calendar").hidden = true; return; }
+  else if (t.dataset.cal === "prev") C.month = shift(-1);
+  else if (t.dataset.cal === "next") C.month = shift(1);
+  else if (t.dataset.cal === "allup") C.day = null;
+  else if (t.dataset.cal === "done") C.showDone = t.checked;
+  else if (t.dataset.cal === "refresh") { await refreshCalendar(); return; }
+  renderCalendar();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") { $("#calendar").hidden = true; closeModal(); } });
+document.addEventListener("click", e => { if (!e.target.closest("#account")) $("#account").open = false; });
+
+/* ---- updating the app ---- */
+const newerThan = (a, b) => a.localeCompare(b, undefined, { numeric: true }) > 0;
+
+function paintUpdate() {
+  const u = S.update; if (!u) return;
+  $("#verLabel").textContent = `Version ${u.current}${u.mode === "installed" ? "" : u.mode === "plugin" ? " · plugin" : " · development copy"}`;
+  $("#autoRow").style.display = $("#checkUpdate").style.display = u.mode === "installed" ? "" : "none";
+  $("#autoUpdate").checked = u.auto;
+  $("#updateText").textContent = `LMS Sync ${u.latest} is available (you have ${u.current}).`;
+  $("#updateBar").classList.toggle("show", u.mode === "installed" && u.available);
+}
+async function checkUpdate(force) {
+  try { S.update = await api(force ? "/api/update/check" : "/api/update", force ? {} : undefined); } catch (e) { return; }
+  paintUpdate();
+  if (force) toast(S.update.error || (S.update.available ? `Version ${S.update.latest} is available.` : "You have the latest version."), 6000);
+}
+async function waitForRestart() {
+  toast("Restarting LMS Sync…", 60000);
+  for (let n = 0; n < 90; n++) {
+    await new Promise(r => setTimeout(r, 1000));
+    const st = await fetch("/api/status").then(r => r.json()).catch(() => null);
+    if (st && !st.restart_needed) return location.reload();
+  }
+  toast("LMS Sync didn't come back — open it again from your desktop.", 20000);
+}
+// The extension lives in the app's folder: after an update, have Chrome load the new files.
+function syncExtension(wanted) {
+  const have = document.documentElement.dataset.lmsExtVersion || "";
+  if (!hasExt() || !wanted || have === wanted || (have && !newerThan(wanted, have))) return;
+  let tried = false;
+  try { tried = sessionStorage.getItem("lms-ext-reload") === wanted; sessionStorage.setItem("lms-ext-reload", wanted); } catch (e) { tried = true; }
+  if (have && !newerThan("1.0.0", have) && !tried) {  // 1.0.0+ can reload itself
+    toast("Updating the Chrome extension…", 4000);
+    extRequest({ kind: "reload" }).then(() => setTimeout(() => location.reload(), 2000));
+  } else showBanner("Finish updating: open chrome://extensions and press ↻ on “LMS Sync capture”, then reload this page.", false);
+}
+$("#checkUpdate").addEventListener("click", () => checkUpdate(true));
+$("#autoUpdate").addEventListener("change", async e => {
+  try { S.update = await api("/api/update/auto", { value: e.target.checked }); paintUpdate(); } catch (err) { toast(err.message, 6000); }
+});
+$("#updateNotes").addEventListener("click", () => {
+  $("#modalBox").innerHTML = `<b>What's new in ${esc(S.update.latest)}</b><div class="annbody" style="margin:10px 0;max-height:50vh;overflow:auto">${esc(S.update.notes || "No notes.")}</div>
+    <div class="row"><span class="spacer"></span><button data-folder="cancel">Close</button></div>`;
+  $("#modalBox").onclick = e => { if (e.target.dataset.folder) closeModal(); };
+  $("#modal").hidden = false;
+});
+$("#updateNow").addEventListener("click", async e => {
+  const b = e.currentTarget; b.disabled = true; b.textContent = "Updating…";
+  try {
+    const r = await api("/api/update/install", {});
+    if (r.updated_to) return waitForRestart();
+    await checkUpdate(true);
+  } catch (err) { toast(err.message, 10000); }
+  b.disabled = false; b.textContent = "Update now";
+});
+
+/* ---- signing in and out (always in this browser, through the extension) ---- */
+function welcomeHtml(expired) {
+  const ext = hasExt(), chrome = /Chrome\//.test(navigator.userAgent);
+  return `<div class="card"><h2>${expired ? "Your Moodle login has expired" : "Welcome to LMS Sync"}</h2>
+    <p class="muted">Download your ISB course files, and keep track of announcements and deadlines.</p>
+    <ol class="steps">
+      <li class="${ext ? "ok" : ""}"><b>Chrome extension</b> ${ext ? "✓ installed" : `— needed to sign in.
+        <div class="muted" style="margin-top:4px">${chrome ? "" : "Open this page in <b>Google Chrome</b> first. "}Type <code>chrome://extensions</code> in the address bar, switch on <b>Developer mode</b>, click <b>Load unpacked</b> and choose:<br><code>${esc(S.extensionDir)}</code></div>
+        <div class="row" style="margin-top:8px"><button id="showExt">Show the folder</button><button id="reloadPage">I've installed it — reload</button></div>`}</li>
+      <li><b>Log in to Moodle</b>
+        <div class="muted" style="margin:4px 0 8px">A tab opens in this Chrome, so your saved password, passkey or existing Moodle login just work. LMS Sync never sees your password.</div>
+        <button class="primary" id="login" ${ext ? "" : "disabled"}>Log in to Moodle</button></li>
+      <li><b>Choose course folders</b> <div class="muted">Pick a course, give it a folder and tick what to keep.</div></li>
+    </ol>
+    <div class="muted" style="font-size:12px">To use a different account, first log out of Moodle itself in this browser:
+      <a class="open" href="https://elearn.isb.edu/login/logout.php" target="_blank" rel="noopener noreferrer">↗ Moodle log out</a></div></div>`;
+}
+
+async function moodleLogin(button) {
+  if (!hasExt()) { toast("Signing in happens in your own Chrome: install the LMS Sync extension first.", 10000); return; }
+  const label = button.textContent; button.disabled = true; button.textContent = "Finish in the new tab…";
+  try {
+    const r = await extRequest({ kind: "renew" });
+    if (!r.ok) throw new Error(r.error || "no answer from the extension");
+    await init(); toast("Logged in");
+  } catch (e) { toast("Log in didn't finish: " + e.message, 8000); }
+  button.disabled = false; button.textContent = label;
+}
+
+async function logOut() {
+  if (!confirm("Log out of LMS Sync on this computer?\n\nThe saved Moodle sign-in is deleted. Your folders, ticks, deadlines and downloaded files stay. Chrome itself stays signed in to Moodle.")) return;
+  try { await api("/api/logout", {}); } catch (e) { toast(e.message, 6000); return; }
+  Object.assign(S, { courses: [], detail: null, current: null, board: null, cal: {} });
+  $("#calendar").hidden = true; document.body.classList.remove("has-course");
+  await init(); toast("Logged out");
+}
+$("#relogin").addEventListener("click", e => moodleLogin(e.currentTarget));
+$("#logout").addEventListener("click", logOut);
+
+const hasExt = () => !!document.documentElement.dataset.lmsExt;
+const capturable = i => i.kind === "link" && (!i.saved_as || /\.(webloc|url)$/i.test(i.saved_as) || i.status === "locked");
+
+let capSeq = 0;
+const capWaiters = new Map();
+window.addEventListener("message", e => {
+  if (e.source !== window || e.data?.type !== "lms-capture-result") return;
+  const w = capWaiters.get(e.data.requestId);
+  if (w) { capWaiters.delete(e.data.requestId); w(e.data); }
+  else if (e.data.ok) { toast("Saved as " + e.data.saved_as, 6000); refreshDetail(); }  // finished later, from the toolbar button
+});
+const extRequest = payload => new Promise(resolve => {
+  const requestId = ++capSeq;
+  capWaiters.set(requestId, resolve);
+  window.postMessage({ type: "lms-capture", requestId, payload }, location.origin);
+});
+async function extCapture(item, courseId) {
+  const t = item.target || {};
+  const result = await extRequest({ url: item.url, kind: t.kind, downloadUrl: t.download_url, filename: t.filename,
+    courseId, key: item.key, name: item.name });
+  if (result.ok) toast("Saved as " + result.saved_as, 6000);
+  else toast(result.error || "Couldn't capture it.", result.needsUser ? 15000 : 8000);
+}
+// Ticked files that need a sign-in the background sync can't do (locked Moodle PDFs, ISB SharePoint):
+// fetched one by one inside the user's own Chrome through the extension.
+async function fetchPending(list) {
+  if (!list.length) return;
+  if (!hasExt()) { toast(`${list.length} file(s) need a sign-in. Install the LMS Sync Chrome extension (extension/ folder) and press Download again.`, 12000); return; }
+  let saved = 0;
+  for (const [n, p] of list.entries()) {
+    toast(`Fetching ${p.name} through your Chrome (${n + 1} of ${list.length})…`, 8000);
+    const r = await extRequest(p);
+    if (r.ok) saved++; else toast(`${p.name}: ${r.error || "couldn't fetch it"}`, 10000);
+  }
+  if (saved) toast(`Saved ${saved} signed-in file(s)`, 6000);
+}
+
+/* ---- events ---- */
+$("#list").addEventListener("click", async e => {
+  if (e.target.closest("[data-stopended]")) {
+    const ended = S.courses.filter(c => c.syncing && c.ended);
+    if (!confirm(`Stop syncing these ended courses?\n\n${ended.map(c => c.name).join("\n")}\n\nFolders and files are kept.`)) return;
+    try { for (const c of ended) await api(`/api/course/${c.id}/syncing`, { value: false }); } catch (err) { toast(err.message, 6000); }
+    await reloadCourses(); if (S.current && S.detail) await refreshDetail();
+    return;
+  }
+  const b = e.target.closest(".course"); if (b) openCourse(+b.dataset.id);
+});
+$("#search").addEventListener("input", renderList);
+
+$("#detail").addEventListener("input", e => {  // keep what's being typed across re-renders
+  const form = e.target.closest?.(".dform");
+  if (form) (S.drafts[form.dataset.form] ||= {})[e.target.dataset.f] = e.target.value;
+});
+
+$("#detail").addEventListener("toggle", e => {
+  if (e.target.classList?.contains("foldbox")) { S.folderOpen = e.target.open; return; }
+  if (e.target.dataset?.dl !== undefined) { e.target.open ? S.openDl.add(e.target.dataset.dl) : S.openDl.delete(e.target.dataset.dl); return; }
+  if (e.target.classList?.contains("addbox")) { S.addOpen = e.target.open; return; }
+  if (e.target.dataset?.ann !== undefined) {  // opening an announcement marks it read
+    const id = +e.target.dataset.ann, a = S.board?.announcements.find(a => a.id === id);
+    if (!e.target.open) { S.openAnn.delete(id); return; }
+    S.openAnn.add(id);
+    if (a?.unread) { a.unread = false; boardPost("read", { id }).catch(err => toast(err.message)); syncCounts(); renderDetail(); }
+    return;
+  }
+  const sid = e.target.dataset?.sid; if (sid === undefined) return;
+  e.target.open ? S.open.add(sid) : S.open.delete(sid);
+}, true);
+
+$("#detail").addEventListener("click", async e => {
+  const t = e.target;
+  if (t.closest("summary") && t.matches("input")) { e.stopPropagation(); return; }
+  if (t.dataset.back !== undefined) { document.body.classList.remove("has-course"); scrollTo({ top: 0 }); return; }
+  if (t.id === "login") return moodleLogin(t);
+  if (t.id === "reloadPage") return location.reload();
+  const id = S.current;
+  try {
+    if (t.id === "showExt") { await api("/api/open-extension-folder", {}); return; }
+    const tab = t.closest("[data-tab]");
+    if (tab) {
+      S.tab = tab.dataset.tab;
+      if (S.tab === "board" && !S.board && !S.boardLoading) loadBoard(id); else renderDetail();
+    } else if (t.id === "openFolder") await api(`/api/course/${id}/open`, {});
+    else if (t.dataset.openfile !== undefined) {
+      const r = await api(`/api/course/${id}/open`, { key: t.dataset.openfile });
+      if (r.revealed) toast("Shown in its folder — this file type isn't opened automatically.", 6000);
+    } else if (S.tab === "board") await boardClick(t);
+    else if (t.id === "browse") {
+      const r = await api("/api/pick-folder", { start: $("#folder").value || S.detail.suggested_folder.replace(/[\\/][^\\/]*$/, "") });
+      if (r.path) { $("#folder").value = r.path; await saveFolder(); }
+    } else if (t.id === "suggest") { $("#folder").value = S.detail.suggested_folder; await saveFolder(); }
+    else if (t.id === "saveFolder") await saveFolder();
+    else if (t.id === "download") await download(id);
+    else if (t.id === "startSync") await setSyncing(id, true);
+    else if (t.dataset.ext !== undefined) {
+      const item = S.detail.sections.flatMap(x => x.items).find(x => x.key === t.dataset.ext);
+      t.disabled = true; t.textContent = "Working…";
+      toast("Opening it in a new tab of this Chrome…", 5000);
+      try { await extCapture(item, id); } finally { await refreshDetail(); }
+    } else if (t.dataset.redo !== undefined) {
+      const key = t.dataset.redo, info = await api(`/api/course/${id}/redownload`, { key });
+      const body = { key, confirm: true };
+      let msg;
+      if (info.found.length === 1) { msg = `Move “${info.name}” to the ${trashName()} and download a fresh copy on the next sync?\n\n(${info.found[0]})`; body.trash = info.found[0]; }
+      else if (!info.found.length) msg = `“${info.name}” isn't in the course folder any more (moved or deleted).\n\nDownload it again on the next sync?`;
+      else msg = `“${info.name}” exists in ${info.found.length} places:\n${info.found.join("\n")}\n\nDownload a new copy on the next sync WITHOUT deleting any of them?`;
+      if (!confirm(msg)) return;
+      const r = await api(`/api/course/${id}/redownload`, body);
+      await refreshDetail();
+      const sec = S.detail.sections.find(x => x.id === t.dataset.sid), it = sec?.items.find(x => x.key === key);
+      toast((r.trashed ? `Moved to the ${trashName()}. ` : "") + (it && isSel(it, sec.id) ? "Press Download now to fetch it again." : "Tick it, then press Download now to fetch it again."), 8000);
+    } else if (t.dataset.import !== undefined) {
+      t.disabled = true;
+      try {
+        const r = await api(`/api/course/${id}/import`, { key: t.dataset.import });
+        if (!r.cancelled) toast("Saved as " + r.saved_as, 6000);
+      } finally { await refreshDetail(); }
+    } else if (t.dataset.capture !== undefined) {
+      t.disabled = true; t.textContent = "Window open…";
+      toast("A Chrome window opened. Sign in if asked — a file is saved automatically; for an article click the blue “Save this page” button. If a site’s human check keeps repeating, close the window and use Import file… instead.", 12000);
+      try {
+        const r = await api(`/api/course/${id}/capture`, { key: t.dataset.capture });
+        toast("Saved as " + r.saved_as, 6000);
+      } finally { await refreshDetail(); }
+    }
+    else if (t.dataset.dismiss !== undefined) {
+      await api(`/api/course/${id}/flags/dismiss`, { key: t.dataset.dismiss || null });
+      await refreshDetail();
+    }
+  } catch (err) { toast(err.message, 6000); }
+});
+
+$("#detail").addEventListener("keydown", e => { if (e.target.id === "folder" && e.key === "Enter") saveFolder().catch(err => toast(err.message, 6000)); });
+
+$("#detail").addEventListener("change", e => {
+  const t = e.target, d = S.detail;
+  if (t.dataset.done !== undefined) {
+    const entry = S.board.deadlines.find(x => x.key === t.dataset.done);
+    boardPost("done", { key: entry.key, done: t.checked }).then(() => {
+      entry.done = t.checked; entry.status = statusOf(entry); syncCounts(); renderDetail();
+    }).catch(err => { t.checked = !t.checked; toast(err.message, 6000); });
+    return;
+  }
+  if (t.id === "inExt") {
+    api(`/api/course/${S.current}/in-extension`, { value: t.checked }).then(() => {
+      d.course.in_extension = t.checked; toast(t.checked ? "Shown in the extension's course list" : "Hidden from the extension's course list");
+    }).catch(err => { t.checked = !t.checked; toast(err.message, 6000); });
+    return;
+  }
+  if (t.id === "organize") {
+    api(`/api/course/${S.current}/organize`, { organize: t.checked }).then(() => {
+      d.course.organize = t.checked; renderDetail(); toast(t.checked ? "New files will go in section folders" : "New files will be flat");
+    }).catch(err => { t.checked = !t.checked; toast(err.message, 6000); });
+    return;
+  }
+  if (t.id === "whole") setCourse(t.checked);
+  else if (t.dataset.sec !== undefined) setSection(d.sections.find(s => s.id === t.dataset.sec), t.checked);
+  else if (t.dataset.item !== undefined) {
+    const sec = d.sections.find(s => s.id === t.dataset.sid);
+    setItem(sec, sec.items.find(i => i.key === t.dataset.item), t.checked);
+  } else return;
+  persistSelection(); renderDetail();
+});
+
+async function saveFolder() {
+  const path = $("#folder").value.trim() || S.detail.suggested_folder;
+  const r = await api(`/api/course/${S.current}/folder`, { path });
+  const c = S.courses.find(c => c.id === S.current); c.folder = r.folder;
+  S.detail.course.folder = r.folder; autoSync(c); S.detail.course.syncing = c.syncing; renderList(); renderDetail(); toast("Folder saved");
+}
+
+async function refreshDetail() {
+  const keepOpen = S.open;
+  S.detail = await api(`/api/course/${S.current}`);
+  S.open = keepOpen; renderDetail();
+  S.courses = await api("/api/courses"); renderList();
+}
+
+async function download(id) {
+  let pending = [];
+  S.busy = true; renderDetail();
+  clearTimeout(S.saveTimer);
+  try {
+    await api(`/api/course/${id}/selection`, S.sel);
+    const r = await api(`/api/course/${id}/sync`, {});
+    const bad = r.errors.length > 0;
+    pending = r.pending_login || [];
+    S.result = { bad, html: `✓ ${r.new.length} new, ${r.updated.length} updated` +
+      (pending.length ? ` · ${pending.length} signed-in file(s) being fetched through your Chrome` : "") +
+      (bad ? "<br>" + r.errors.map(esc).join("<br>") : "") };
+  } catch (e) { S.result = { bad: true, html: esc(e.message) }; }
+  S.busy = false;
+  await refreshDetail();
+  try { await fetchPending(pending); } finally { await refreshDetail(); }
+}
+
+async function syncAll(button) {
+  const label = button.textContent; button.disabled = true; button.textContent = "Syncing…";
+  try {
+    const rs = await api("/api/sync-all", {});
+    const n = rs.reduce((a, r) => a + r.new.length, 0), u = rs.reduce((a, r) => a + r.updated.length, 0);
+    toast(rs.length ? `${n} new, ${u} updated across ${rs.length} course(s)` : "No course is in your syncing list — tick one in the left panel.", 6000);
+    S.courses = await api("/api/courses"); renderList(); if (S.current && S.detail) await refreshDetail();
+    await fetchPending(rs.flatMap(r => r.pending_login || []));
+    S.courses = await api("/api/courses"); renderList(); if (S.current && S.detail) await refreshDetail();
+  } catch (e) { toast(e.message, 6000); }
+  button.disabled = false; button.textContent = label;
+}
+$("#syncAll").addEventListener("click", e => syncAll(e.currentTarget));
+$("#fetchLocked").addEventListener("click", e => syncAll(e.currentTarget));
+
+$("#renew").addEventListener("click", e => moodleLogin(e.currentTarget));
+
+const THEMES = [
+  { id: "paper", name: "Paper", dot: "#f1ebdd" },
+  { id: "sepia", name: "Sepia", dot: "#e3d5b8" },
+  { id: "dusk", name: "Dusk", dot: "#2a2d34" },
+  { id: "night", name: "Night", dot: "#14171d" },
+];
+const currentTheme = () => THEMES.find(t => t.id === document.documentElement.dataset.theme)
+  || (matchMedia("(prefers-color-scheme: dark)").matches ? THEMES[3] : THEMES[0]);
+function paintThemeButton() {
+  const cur = currentTheme(), next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
+  $("#theme").innerHTML = `<span class="dot" style="background:${cur.dot}"></span>${cur.name}`;
+  $("#theme").title = `Theme: ${cur.name} — click for ${next.name}`;
+}
+$("#theme").addEventListener("click", () => {
+  const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+  document.documentElement.dataset.theme = next.id;
+  try { localStorage.setItem("lms-theme", next.id); } catch (e) {}
+  paintThemeButton();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintThemeButton);
+paintThemeButton();
+
+async function init() {
+  const st = await api("/api/status").catch(() => ({ state: "offline" }));
+  if (st.restart_needed) { await api("/api/restart", {}).catch(() => {}); return waitForRestart(); }
+  S.os = st.os || "mac";
+  checkUpdate(false);
+  const pill = $("#status");
+  pill.className = "pill " + (st.state === "ok" ? "ok" : "bad");
+  const d = $("#daily"), ld = st.last_daily;
+  if (ld) {
+    const when = new Date(ld.at), today = when.toDateString() === new Date().toDateString();
+    const t = (today ? "today " : when.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " ") +
+      when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    const what = { offline: "no network", failed: "failed", auth: "login expired" }[ld.outcome] ||
+      [ld.new ? `${ld.new} new` : "", ld.updated ? `${ld.updated} updated` : "",
+        ld.announcements ? `${ld.announcements} announcement(s)` : "", ld.due_soon ? `${ld.due_soon} due within 48h` : ""].filter(Boolean).join(" · ") || "nothing new";
+    d.textContent = `Daily sync ${t} · ${what}`;
+    d.className = "pill " + (["failed", "auth", "offline"].includes(ld.outcome) ? "bad" : "ok");
+  } else { d.textContent = "Daily sync: hasn't run yet"; }
+  d.style.display = "";
+  pill.textContent = { ok: (st.user || "Connected") + " ▾", expired: "Login expired", missing: "Not logged in", offline: "Offline ▾" }[st.state];
+  S.extensionDir = st.extension_dir || "";
+  const signedOut = st.state === "expired" || st.state === "missing";
+  document.body.classList.toggle("signed-out", signedOut);
+  if (signedOut) { hideBanner(); $("#lockedBar").classList.remove("show"); $("#calendar").hidden = true; $("#detail").innerHTML = welcomeHtml(st.state === "expired"); return; }
+  if (st.state === "offline") { showBanner("Can't reach Moodle."); return; }
+  hideBanner();
+  syncExtension(st.extension_version);
+  if (!S.current) $("#detail").innerHTML = '<div class="empty">Pick a course on the left.</div>';
+  S.courses = await api("/api/courses"); renderList();
+}
+init();
+</script>
+</body>
+</html>
