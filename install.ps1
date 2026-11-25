@@ -46,11 +46,11 @@
         Remove-Item $Tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    Write-Host 'Setting up Python (a minute or two the first time)...'
+    Write-Host 'Setting up Python. This downloads about 60 MB, so it can take several minutes on slow Wi-Fi...'
     & $Python -m venv (Join-Path $Dir '.venv')
     if ($LASTEXITCODE -ne 0) { throw 'Creating the Python environment failed.' }
     $VenvPython = Join-Path $Dir '.venv\Scripts\python.exe'
-    & $VenvPython -m pip install -q --disable-pip-version-check -r (Join-Path $Dir 'requirements.txt')
+    & $VenvPython -m pip install --disable-pip-version-check -r (Join-Path $Dir 'requirements.txt')
     if ($LASTEXITCODE -ne 0) { throw 'Installing the dependencies failed.' }
 
     $extra = @()

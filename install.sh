@@ -39,9 +39,9 @@ mkdir -p "$DIR"
 cp -R "$TOP"/. "$DIR"/
 chmod +x "$DIR/install.sh" "$DIR"/scripts/*.sh 2>/dev/null || true
 
-say "Setting up Python (a minute or two the first time)…"
+say "Setting up Python. This downloads about 60 MB, so it can take several minutes on slow Wi-Fi…"
 "$PY" -m venv "$DIR/.venv"
-"$DIR/.venv/bin/python3" -m pip install -q --disable-pip-version-check -r "$DIR/requirements.txt"
+"$DIR/.venv/bin/python3" -m pip install --disable-pip-version-check -r "$DIR/requirements.txt"
 
 if [ -n "${LMS_SYNC_NO_DAILY:-}" ]; then
   "$DIR/.venv/bin/python3" "$DIR/src/cli.py" install-integration --no-daily || say "! Some shortcuts couldn't be created."
