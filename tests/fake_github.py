@@ -14,7 +14,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-INCLUDE = ("src", "extension", "scripts", "tests", "VERSION", "requirements.txt", "README.md", "install.sh", "install.ps1")
+INCLUDE = ("src", "extension", "scripts", "tests", "VERSION", "requirements.txt", "README.md", "LICENSE", "install.sh", "install.ps1")
 
 
 def make_zip(version: str, overrides: dict[str, str] | None = None) -> bytes:

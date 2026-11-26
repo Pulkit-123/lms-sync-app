@@ -65,6 +65,7 @@ the token.
 - Files you already have are never overwritten; a changed file arrives as `name (updated DATE)`.
 - Moving or renaming downloads is fine — nothing is downloaded twice.
 - Nothing is deleted unless you press **Delete file…** (it goes to the Trash / Recycle Bin).
+- Some faculty upload a PDF converted into a web page; it's saved as a PDF again.
 - DRM-protected videos aren't downloaded. Some sites' "are you human" checks need you to click.
 - Moodle hides some assignments after their date; the app remembers the ones it has seen, and you can add others yourself.
 
@@ -76,6 +77,10 @@ cd ~/LMS-Sync && .venv/bin/python3 src/cli.py uninstall-integration
 
 (Windows: `cd $HOME\LMS-Sync; .venv\Scripts\python.exe src\cli.py uninstall-integration`.)
 Then delete the `LMS-Sync` folder and remove the extension in Chrome. Your course folders stay.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). The licence covers this app's code, not any course material you download with it.
 
 ## For developers
 

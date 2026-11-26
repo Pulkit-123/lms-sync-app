@@ -483,7 +483,7 @@ function renderDetail() {
 function itemRow(i, sec) {
   return `<label class="item">
           <input type="checkbox" data-item="${esc(i.key)}" data-sid="${esc(sec.id)}" ${isSel(i, sec.id) ? "checked" : ""}>
-          <span class="nm">${esc(i.name)}${i.note ? `<span class="note">${esc(i.note)}</span>` : ""}${i.kind === "link" && /^https?:\/\//i.test(i.url) ? `<a class="open" href="${esc(i.url)}" target="_blank" rel="noopener noreferrer" title="Open the original link: ${esc(i.url)}">↗ open link</a>${capturable(i) ? (hasExt()
+          <span class="nm">${esc(i.name)}${/\.html?$/i.test(i.name) && /\.pdf$/i.test(i.saved_as || "") ? ' <span class="muted" title="Moodle has this as a web page; it was saved as a PDF">· saved as PDF</span>' : ""}${i.note ? `<span class="note">${esc(i.note)}</span>` : ""}${i.kind === "link" && /^https?:\/\//i.test(i.url) ? `<a class="open" href="${esc(i.url)}" target="_blank" rel="noopener noreferrer" title="Open the original link: ${esc(i.url)}">↗ open link</a>${capturable(i) ? (hasExt()
             ? `<button class="cap" data-ext="${esc(i.key)}" title="Opens the link in a new tab of this Chrome and saves it (files, signed-in files and pages). For a site with a human check it tries once; if blocked, finish the check in the tab and click the LMS Sync button in Chrome's toolbar.">Capture in my Chrome</button>`
             : `<button class="cap" data-noext title="Install the LMS Sync Chrome extension (extension/ folder: chrome://extensions → Developer mode → Load unpacked) to capture this in your own Chrome.">Needs the extension</button>`) +
           `<button class="cap" data-import="${esc(i.key)}" title="Save the page or file yourself, then pick it here.">Import file…</button>` : ""}` : ""}</span>

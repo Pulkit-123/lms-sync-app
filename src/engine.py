@@ -271,6 +271,13 @@ def _run_plan(course_id: int, plan: _Plan, fetched: browser.Outcome) -> None:
             if allow_html and item.kind == "file" and download.detect_drm_video_embed(content):
                 content, name = _drm_placeholder(item, content, name)
                 allow_html, expected = False, None
+            elif allow_html and item.kind == "file" and browser.is_converted_pdf(content):
+                # A PDF uploaded as a web page: save it as a PDF again.
+                try:
+                    content, name = browser.html_pages_to_pdf(content), os.path.splitext(name)[0] + ".pdf"
+                    allow_html, expected = False, None
+                except Exception as e:  # noqa: BLE001 — the page itself is still worth having
+                    summary.errors.append(f"{item.name}: couldn't turn it into a PDF ({str(e).splitlines()[0][:150]}) — saved the web page instead")
 
             folder = _target_dir(plan.dest, section_name, plan.organize)
             target = _unique_path(folder, _updated_name(name) if is_update else name, item.module_name)

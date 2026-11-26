@@ -88,6 +88,15 @@ def main() -> None:
         assert status["state"] == "missing", status  # a fresh install isn't logged in
         assert status["os"] == ("windows" if WINDOWS else "mac"), status
 
+        step("turn a pdf2htmlEX web page back into a PDF (real browser)")
+        sample = ('<!DOCTYPE html><!-- Created by pdf2htmlEX --><html><head><style>.pf{width:600px;height:800px;'
+                  'overflow:hidden;position:relative}@media print{.pf{page-break-after:always}}</style></head><body>'
+                  '<div id="page-container"><div class="pf">Page one</div><div class="pf">Page two</div></div></body></html>')
+        code = ("import sys, re, browser; pdf = browser.html_pages_to_pdf(sys.stdin.buffer.read()); "
+                "assert pdf.startswith(b'%PDF'); pages = len(re.findall(rb'/Type\\s*/Page(?![s])', pdf)); "
+                "print('pages', pages); assert pages == 2, pages")
+        subprocess.run([str(python), "-c", code], cwd=destination / "src", env=env, input=sample.encode(), check=True, timeout=180)
+
         step("daily job")
         subprocess.run([str(python), str(destination / "src" / "cli.py"), "daily"], env=env, check=True, timeout=300)
 

@@ -382,6 +382,31 @@ class EngineTest(unittest.TestCase):
         sel = state.get_course(CID)["selection"]
         self.assertEqual((sel["items"], sel["excluded"]), (["b"], []))
 
+    def test_pdf_uploaded_as_a_web_page_is_saved_as_a_pdf(self):
+        page = b'<!DOCTYPE html>\n<!-- Created by pdf2htmlEX -->\n<html><body><div class="pf">x</div></body></html>'
+        self.sections[0].items = [item("h", "HW1.html", size=len(page))]
+        self.files["https://x/h"] = page
+        with mock.patch.object(browser, "html_pages_to_pdf", lambda content: b"%PDF-1.4 converted"):
+            s = engine.sync_course(CID)
+        self.assertEqual((s.new, s.errors), (["HW1.pdf"], []))
+        self.assertEqual((self.dest / "HW1.pdf").read_bytes(), b"%PDF-1.4 converted")
+        self.assertEqual(engine.sync_course(CID).updated, [])  # tracked by Moodle's size, not the PDF's
+
+    def test_if_conversion_fails_the_web_page_is_kept_and_an_ordinary_page_is_never_converted(self):
+        converted = b'<!DOCTYPE html>\n<!-- Created by pdf2htmlEX -->\n<html></html>'
+        plain = b"<!DOCTYPE html>\n<html><body>a book chapter</body></html>"
+        self.sections[0].items = [item("h", "HW2.html", size=len(converted)), item("p", "Chapter.html", size=len(plain), mid=2)]
+        self.files.update({"https://x/h": converted, "https://x/p": plain})
+
+        def boom(content):
+            raise RuntimeError("no browser")
+
+        with mock.patch.object(browser, "html_pages_to_pdf", boom):
+            s = engine.sync_course(CID)
+        self.assertEqual(sorted(s.new), ["Chapter.html", "HW2.html"])
+        self.assertEqual(len(s.errors), 1)
+        self.assertIn("HW2.html", s.errors[0])
+
     def test_direct_file_link_downloads_without_a_browser(self):
         self._no_browser()
         self.sections[0].items = [item("link:4", "Paper", kind="link", modname="url", fileurl="https://example.com/Paper.pdf")]

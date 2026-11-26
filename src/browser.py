@@ -146,6 +146,51 @@ def fetch_all(jobs: list[Job]) -> Outcome:
             context.close()
 
 
+def is_converted_pdf(content: bytes) -> bool:
+    """A PDF that someone converted into a web page with pdf2htmlEX and uploaded
+    as HTML (some faculty do). It "opens in a viewer" on Moodle; there is no PDF
+    file behind it."""
+    return b"pdf2htmlEX" in content[:4096]
+
+
+# The viewer's screen-only chrome (grey backdrop, sidebar, spinner) stays out of the PDF.
+_PRINT_CLEANUP = ("<style>@media print{html,body,#page-container{margin:0!important;padding:0!important;background:#fff!important}"
+                  "#sidebar,.loading-indicator{display:none!important}.pf{margin:0!important;box-shadow:none!important}}</style>")
+
+# The size of the first page as the file's own print styles lay it out.
+_FIRST_PAGE_SIZE = """() => { const page = document.querySelector('.pf'); if (!page) return null;
+  const box = page.getBoundingClientRect(); return [box.width, box.height, document.querySelectorAll('.pf').length]; }"""
+
+
+def html_pages_to_pdf(content: bytes, timeout_ms: int = 60000) -> bytes:
+    """Turn such a page back into a PDF, one PDF page per original page, at the
+    original page size, with selectable text. The file is rendered offline with
+    its scripts switched off (it's self-contained; nothing it contains runs)."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = _launch_plain(p)
+        try:
+            context = browser.new_context(java_script_enabled=False, offline=True)
+            page = context.new_page()
+            page.set_default_timeout(timeout_ms)
+            # Styles go into the source: add_style_tag (like anything promise-based)
+            # never settles in a page whose scripts are off.
+            markup = content.decode("utf-8", errors="replace").replace("</head>", _PRINT_CLEANUP + "</head>", 1)
+            page.set_content(markup, wait_until="load")
+            page.emulate_media(media="print")
+            # (No waiting on document.fonts.ready: with scripts off that promise never
+            # settles. The fonts are inline data, loaded by the time "load" fires.)
+            size = page.evaluate(_FIRST_PAGE_SIZE)
+            if not size or size[0] < 50 or size[1] < 50:
+                raise ValueError("no pages found in it")
+            width, height, _count = size
+            return page.pdf(width=f"{width}px", height=f"{height}px", print_background=True,
+                            margin={"top": "0", "right": "0", "bottom": "0", "left": "0"})
+        finally:
+            browser.close()
+
+
 def _launch_plain(p):
     try:
         return p.chromium.launch(headless=True, channel="chrome")
