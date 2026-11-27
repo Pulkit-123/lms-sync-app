@@ -278,6 +278,28 @@ def pick_file() -> dict:
     return {"path": path} if path else {"cancelled": True}
 
 
+def _board_action(course_id: int, action: str, body: dict) -> dict:
+    """Everything the user can change on a course's announcements & deadlines tab."""
+    if action == "read":
+        ann = body.get("id")
+        board.mark_read(course_id, None if ann is None else int(ann))
+    elif action == "done":
+        board.set_done(course_id, str(body.get("key", "")), bool(body.get("done")))
+    elif action in ("add", "edit"):
+        fields = (str(body.get("title", "")), int(body.get("due") or 0), str(body.get("notes", "")), body.get("links", ""))
+        if action == "add":
+            board.add_manual(course_id, *fields)
+        else:
+            board.edit_manual(course_id, str(body.get("key", "")), *fields)
+    elif action == "remove":
+        board.remove(course_id, str(body.get("key", "")))
+    elif action == "dismiss":
+        board.dismiss_suggestion(course_id, str(body.get("key", "")))
+    else:
+        raise LookupError("not found")
+    return {"ok": True}
+
+
 def calendar_view(refresh: bool) -> dict:
     problems: list[str] = []
     if refresh:
